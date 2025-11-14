@@ -1,4 +1,4 @@
-// File: app/api/timesheet/route.ts
+// File: src/app/timesheet/route.ts
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 
@@ -11,22 +11,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thiếu thông tin rồi mày ơi.' }, { status: 400 });
     }
 
-    // Xử lý quan trọng: 
-    // Gộp Ngày ("2025-11-14") và Giờ ("17:00") thành một đối tượng Date chuẩn
-    // mà Postgres (TIMESTAMPTZ) hiểu được.
-    const timeInTimestamp = new Date(`${workDate}T${timeIn}:00`);
-    const timeOutTimestamp = new Date(`${workDate}T${timeOut}:00`);
+    // --- SỬA LỖI BUILD ---
+    // Mình không dùng new Date() nữa.
+    // Mình build một cái string ISO 8601 có múi giờ (+07:00 cho Việt Nam)
+    // và ném thẳng cho Postgres, nó sẽ tự hiểu.
+    // Đây là một "Primitive" (string) nên TypeScript sẽ không báo lỗi.
+    
+    const timeInISOString = `${workDate}T${timeIn}:00+07:00`;
+    const timeOutISOString = `${workDate}T${timeOut}:00+07:00`;
 
-    // Check logic: Giờ ra phải sau giờ vào
-    if (timeOutTimestamp <= timeInTimestamp) {
+    // Check logic: Giờ ra phải sau giờ vào (dùng new Date để so sánh cho chắc)
+    if (new Date(timeOutISOString) <= new Date(timeInISOString)) {
         return NextResponse.json({ error: 'Giờ kết thúc phải sau giờ bắt đầu chứ?' }, { status: 400 });
     }
 
-    // Chèn vào database
+    // Chèn vào database bằng string
     await sql`
       INSERT INTO timesheets (employee_name, work_date, time_in, time_out)
-      VALUES (${employeeName}, ${workDate}, ${timeInTimestamp}, ${timeOutTimestamp});
+      VALUES (${employeeName}, ${workDate}, ${timeInISOString}, ${timeOutISOString});
     `;
+    // --- KẾT THÚC SỬA LỖI ---
 
     return NextResponse.json({ message: 'Chấm công thành công!' }, { status: 200 });
 
